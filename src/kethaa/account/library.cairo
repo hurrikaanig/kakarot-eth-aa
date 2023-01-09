@@ -158,6 +158,30 @@ namespace KETHAA {
             let (keccak_ptr: felt*) = alloc();
             verify_eth_signature_uint256{keccak_ptr=keccak_ptr}(msg_hash=tx_hash.res, r=r.res, s=s.res, v=v.n, eth_address=eth_address);
             return (is_valid=1);
+        }
+        if (tx_type == 0) {
+            let data_len: felt = [fields].data_len - SIGNATURE_LEN; // remove the sig to hash the tx
+            let (list_ptr: felt*) = alloc();
+            let (rlp_len: felt) = RLP.encode_rlp_list(data_len, [fields].data, list_ptr); // encode the rlp list without the sig
+            let (keccak_ptr: felt*) = alloc();
+            let keccak_ptr_start = keccak_ptr;
+            let (words: felt*) = alloc();
+            // transforms bytes to groups of 64 bits (used for hashing)
+            let (words_len: felt) = RLP.bytes_to_words(
+                data_len=rlp_len + 1, data=list_ptr, words_len=0, words=words
+            );
+            // keccak_bigend because verify_eth_signature_uint256 requires bigend
+            let tx_hash = keccak_bigend{keccak_ptr=keccak_ptr}(inputs=words, n_bytes=rlp_len + 1);
+            let (local sub_fields: RLP.Field*) = alloc();
+            // decode the rlp elements in the tx (was in the list element)
+            RLP.decode_rlp([fields].data_len, [fields].data, sub_fields);
+            let v = RLP.bytes_to_felt(sub_fields[V_IDX].data_len, sub_fields[V_IDX].data, 0);
+            let r = RLP.bytes_to_uint256(data_len=32, data=sub_fields[R_IDX].data);
+            let s = RLP.bytes_to_uint256(data_len=32, data=sub_fields[S_IDX].data);
+            finalize_keccak(keccak_ptr_start=keccak_ptr_start,keccak_ptr_end=keccak_ptr);
+            let (keccak_ptr: felt*) = alloc();
+            verify_eth_signature_uint256{keccak_ptr=keccak_ptr}(msg_hash=tx_hash.res, r=r.res, s=s.res, v=v.n, eth_address=eth_address);
+            return (is_valid=1);
         } else {
             assert 1 = 0;
             return (is_valid=0);

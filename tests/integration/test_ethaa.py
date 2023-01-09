@@ -23,6 +23,17 @@ txdict = dict(
         data=b''
 )
 
+txdict_legacy = dict(
+        nonce=1,
+        chainId=9001,
+        maxFeePerGas=1000,
+        maxPriorityFeePerGas=667667,
+        gas=999999999,
+        to=bytes.fromhex('95222290dd7278aa3ddd389cc1e1d165cc4bafe5'),
+        value=10000000000000000,
+        data=b''
+)
+
 @pytest.mark.asyncio
 async def test_address_compute():
     starknet = await Starknet.empty()
@@ -48,6 +59,21 @@ async def test_eth_aa_signature():
     with pytest.raises(StarkException):
         # test invalid signature
         await account.is_valid_signature([*to_uint(web3.Web3.toInt(os.urandom(32)))], [raw_tx.v, *to_uint(raw_tx.r), *to_uint(raw_tx.s)]).call()
+
+
+@pytest.mark.asyncio
+async def test_eth_aa_signature_legacy():
+    starknet = await Starknet.empty()
+    (deployer, account, private_key, evm_address) = await setup_test_env(starknet)
+    evm_eoa = web3.Account.from_key(keys.PrivateKey(private_key_bytes=private_key))
+    raw_tx = evm_eoa.sign_transaction(txdict)
+    txhash = serializable_unsigned_transaction_from_dict(txdict).hash()
+    call_info = await account.is_valid_signature([*to_uint(web3.Web3.toInt(txhash))], [raw_tx.v, *to_uint(raw_tx.r), *to_uint(raw_tx.s)]).call()
+    assert call_info.result.is_valid == True
+    with pytest.raises(StarkException):
+        # test invalid signature
+        await account.is_valid_signature([*to_uint(web3.Web3.toInt(os.urandom(32)))], [raw_tx.v, *to_uint(raw_tx.r), *to_uint(raw_tx.s)]).call()
+
 
 @pytest.mark.asyncio
 async def test_execute():
